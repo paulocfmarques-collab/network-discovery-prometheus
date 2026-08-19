@@ -4,7 +4,6 @@
 
 <p>
   <img src="https://img.shields.io/badge/Python-3.x-3776ABon&logoColor=white">
-  <img src="https://img.shields.io/badge522C?logo=prometheus&logoColor=white">
   <img src="https://img.shields.io/badge/Grafana-F46800?logo=grafor=white">
 </p>
 
