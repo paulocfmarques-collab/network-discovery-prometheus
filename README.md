@@ -2,8 +2,11 @@
 
 > Descoberta automática de dispositivos em rede, geração de inventário, integração com Prometheus e atualização dinâmica de configurações do Telegraf.
 
-![Python](https://img.shields.io/badge/python-3.x-blue.svgmg.shields.io/badge/platform-linux-green.svg)
-![Prometheus](https://img.shields.io/badge/prometheus-supported-orangemg.shields.io/badge/telegraf-supported-blue.svg)
+<p>
+  <img src="https://img.shields.io/badge/Python-3.x-3776ABon&logoColor=white">
+  <img src="https://img.shields.io/badge522C?logo=prometheus&logoColor=white">
+  <img src="https://img.shields.io/badge/Grafana-F46800?logo=grafor=white">
+</p>
 
 ## 📖 Sobre o Projeto
 
