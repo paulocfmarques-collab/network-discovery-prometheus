@@ -1,382 +1,216 @@
-# 🔍 Network Discovery for Prometheus & Telegraf
+<div align="center">
 
-> Descoberta automática de dispositivos em rede, geração de inventário, integração com Prometheus e atualização dinâmica de configurações do Telegraf.
+# Network Discovery for Prometheus
 
-<p>
-  <img src="https://img.shields.io/badge/Python-3.x-3776ABon&logoColor=white">
-  <img src="https://img.shields.io/badge/Grafana-F46800?logo=grafor=white">
-</p>
+**Automated network asset discovery, inventory enrichment, and observability target generation.**
 
-## 📖 Sobre o Projeto
+[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-file__sd-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#file_sd_config)
+[![Telegraf](https://img.shields.io/badge/Telegraf-supported-0F62FE?logo=influxdb&logoColor=white)](https://www.influxdata.com/time-series-platform/telegraf/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Este projeto realiza a descoberta automática de ativos em uma rede local utilizando ferramentas como **Nmap** e **ARP Scan**, enriquecendo os dados encontrados com informações de:
+Discover devices once. Enrich them consistently. Monitor them automatically.
 
-- Nome amigável baseado em MAC Address
-- Fabricante (Vendor)
-- Sistema Operacional
-- Tipo do dispositivo
-- Portas e serviços disponíveis
-- Resolução DNS e mDNS
-- Latência
-- Informações via SNMP
-
-Ao final da execução são gerados automaticamente:
-
-✅ Inventário completo dos dispositivos
-
-✅ Arquivo de targets para o Prometheus
-
-✅ Configuração de monitoramento para o Telegraf
-
-✅ Histórico de dispositivos descobertos
-
-O objetivo é facilitar a gestão de infraestrutura e o monitoramento contínuo de ambientes corporativos, laboratórios ou homelabs.
+</div>
 
 ---
 
-## ✨ Funcionalidades
+## Contents
 
-### 🔎 Descoberta de Hosts
+- [Overview](#overview)
+- [Why this project](#why-this-project)
+- [Architecture](#architecture)
+- [Discovery data flow](#discovery-data-flow)
+- [Capabilities](#capabilities)
+- [Repository layout](#repository-layout)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Running a discovery](#running-a-discovery)
+- [Generated artifacts](#generated-artifacts)
+- [Prometheus integration](#prometheus-integration)
+- [Telegraf integration](#telegraf-integration)
+- [Operational considerations](#operational-considerations)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
 
-- Varredura de rede com Nmap
-- Descoberta de dispositivos ativos
-- Resolução de nomes DNS
-- Resolução de nomes mDNS
-- Identificação de MAC Address
+## Overview
 
-### 🏷️ Classificação de Dispositivos
+`network-discovery-prometheus` is a lightweight Python discovery runner for Linux networks. It combines active host discovery, ARP/MAC resolution, DNS and mDNS lookup, latency checks, service inspection, operating-system detection, and optional SNMP identification into a durable inventory.
 
-- Associação MAC → Nome amigável
-- Identificação de fabricante
-- Classificação automática de dispositivos
+The same run produces Prometheus `file_sd_config` targets and a Telegraf ping configuration, so newly discovered devices can become observable without manually maintaining target lists.
 
-Exemplos:
+> **Scope:** run this only on networks you own or are explicitly authorized to assess. Network scanning can be intrusive and may trigger security controls.
 
-- Servidores
-- Workstations
-- Notebooks
-- Switches
-- Roteadores
-- Impressoras
-- Equipamentos IoT
+## Why this project
 
-### 📊 Coleta Avançada
-
-- Verificação de latência
-- Detecção de sistema operacional
-- Levantamento de portas abertas
-- Identificação de serviços
-- Consulta SNMP
-
-### 📈 Integração com Observabilidade
-
-- Geração automática de Service Discovery para Prometheus
-- Atualização automática das configurações do Telegraf
-- Reinício automático do serviço Telegraf
-
-### 📝 Histórico de Ativos
-
-- Registro persistente dos hosts encontrados
-- Comparação entre execuções
-- Rastreamento de alterações da rede
-
----
-
-## 📈 Integração com Prometheus
-
-Uma das principais funcionalidades deste projeto é a geração automática de arquivos de **Service Discovery** para o Prometheus.
-
-Durante a execução do processo de descoberta, todos os hosts identificados na rede são processados e exportados para um arquivo JSON compatível com a funcionalidade `file_sd_config` do Prometheus.
-
-Isso elimina a necessidade de manter listas de targets manualmente, permitindo que novos dispositivos passem a ser monitorados automaticamente.
-
-## Fluxo de Integração
-
-```mermaid
-flowchart LR
-
-    A[Network Discovery] --> B[Nmap Scan]
-    B --> C[ARP Scan]
-    C --> D[Enriquecimento de Dados]
-
-    D --> E[Inventory JSON]
-    D --> F[Prometheus Targets]
-
-    F --> G[rede.json]
-
-    G --> H[Prometheus]
-
-    H --> I[Node Exporter]
-    H --> J[SNMP Exporter]
-    H --> K[Blackbox Exporter]
-
-    H --> L[Grafana]
-```
-
-## Arquivo Gerado
-
-O script cria ou atualiza automaticamente o arquivo:
+Manual target management becomes unreliable as networks change. This project creates a repeatable pipeline:
 
 ```text
-/etc/prometheus/targets/rede.json
+┌─────────────────────┐     ┌────────────────────┐     ┌──────────────────────┐
+│ Network              │     │ Discovery runner   │     │ Observability         │
+│ devices              │ ──▶ │ discovery.py      │ ──▶ │ Prometheus + Telegraf │
+│ servers, switches,   │     │ scan · enrich ·    │     │ dynamic targets       │
+│ printers, IoT        │     │ persist            │     │ and reachability      │
+└─────────────────────┘     └────────────────────┘     └──────────────────────┘
+                                      │
+                                      ▼
+                           ┌────────────────────┐
+                           │ inventory.json     │
+                           │ history.json       │
+                           │ discovery.log      │
+                           └────────────────────┘
 ```
 
-Exemplo de conteúdo:
-
-```json
-[
-  {
-    "targets": [
-      "192.168.1.10",
-      "192.168.1.20",
-      "192.168.1.30"
-    ],
-    "labels": {
-      "job": "network"
-    }
-  }
-]
-```
-
-## Configuração do Prometheus
-
-Adicione a seguinte configuração ao arquivo `prometheus.yml`:
-
-```yaml
-scrape_configs:
-
-  - job_name: "network_discovery"
-
-    file_sd_configs:
-      - files:
-          - /etc/prometheus/targets/rede.json
-
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-```
-
-Após a alteração, recarregue ou reinicie o Prometheus:
-
-```bash
-sudo systemctl restart prometheus
-```
-
----
-
-## Integração com SNMP Exporter
-
-Para monitoramento de switches, roteadores, access points e outros dispositivos de rede, o mesmo arquivo de descoberta pode ser utilizado pelo SNMP Exporter.
-
-```yaml
-scrape_configs:
-
-  - job_name: "snmp"
-
-    metrics_path: /snmp
-
-    params:
-      module: [if_mib]
-
-    file_sd_configs:
-      - files:
-          - /etc/prometheus/targets/rede.json
-
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-
-      - source_labels: [__param_target]
-        target_label: instance
-
-      - target_label: __address__
-        replacement: localhost:9116
-```
-
----
-
-## Integração com Blackbox Exporter
-
-Para monitoramento de disponibilidade ICMP (ping), HTTP ou TCP dos ativos descobertos.
-
-```yaml
-scrape_configs:
-
-  - job_name: "icmp"
-
-    metrics_path: /probe
-
-    params:
-      module: [icmp]
-
-    file_sd_configs:
-      - files:
-          - /etc/prometheus/targets/rede.json
-
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-
-      - source_labels: [__param_target]
-        target_label: instance
-
-      - target_label: __address__
-        replacement: localhost:9115
-```
-
----
-
-## Visão Completa da Observabilidade
-
-```mermaid
-flowchart TD
-
-    subgraph Rede Corporativa
-        A[Servidores]
-        B[Switches]
-        C[Roteadores]
-        D[Impressoras]
-        E[IoT]
-        F[Estações de Trabalho]
-    end
-
-    subgraph Discovery
-        G[discovery.py]
-    end
-
-    subgraph Arquivos Gerados
-        H[inventory.json]
-        I[history.json]
-        J[rede.json]
-    end
-
-    subgraph Monitoramento
-        K[Prometheus]
-        L[SNMP Exporter]
-        M[Blackbox Exporter]
-        N[Telegraf]
-    end
-
-    subgraph Dashboards
-        O[Grafana]
-    end
-
-    A --> G
-    B --> G
-    C --> G
-    D --> G
-    E --> G
-    F --> G
-
-    G --> H
-    G --> I
-    G --> J
-
-    J --> K
-
-    K --> L
-    K --> M
-
-    G --> N
-
-    K --> O
-```
-
-## Benefícios
-
-✅ Descoberta automática de ativos
-
-✅ Atualização dinâmica dos targets do Prometheus
-
-✅ Inventário sempre atualizado
-
-✅ Integração com ambientes Grafana
-
-✅ Compatível com SNMP Exporter
-
-✅ Compatível com Blackbox Exporter
-
-✅ Redução de configuração manual
-
-✅ Escalável para ambientes corporativos, educacionais e homelabs
-
-> Com essa abordagem, qualquer novo dispositivo encontrado na rede pode ser automaticamente incorporado ao ecossistema de monitoramento sem necessidade de intervenção manual.
-
----
-
-## 🏗️ Arquitetura
+## Architecture
 
 ```mermaid
 flowchart LR
-
-    subgraph Discovery
-        A[Nmap]
-        B[ARP Scan]
-        C[SNMP]
-        D[DNS/mDNS]
+    subgraph NET[Authorized network]
+        DEV[Hosts and network devices]
     end
 
-    subgraph Processamento
-        E[Identificação de Hosts]
-        F[Vendor Detection]
-        G[OS Detection]
-        H[Services Detection]
+    subgraph DISC[discovery.py]
+        CFG[Load config and dictionaries]
+        SCAN[Nmap host discovery]
+        ARP[ARP scan and MAC enrichment]
+        ENRICH[Parallel host enrichment]
+        HIST[Update historical identity]
+        CFG --> SCAN
+        SCAN --> ARP
+        ARP --> ENRICH
+        ENRICH --> HIST
     end
 
-    subgraph Outputs
-        I[Inventory JSON]
-        J[History JSON]
-        K[Prometheus Targets]
-        L[Telegraf Config]
+    subgraph TOOLS[System tools]
+        NMAP[nmap]
+        ARPSCAN[arp-scan]
+        PING[ping]
+        DNS[DNS / mDNS]
+        SNMP[snmpget]
     end
 
-    subgraph Monitoring
-        M[Prometheus]
-        N[Grafana]
+    subgraph OUT[Generated outputs]
+        INV[inventory.json]
+        TARGETS[Prometheus rede.json]
+        TEL[Telegraf ping.conf]
+        HISTORY[history.json]
+        LOG[Rotating discovery.log]
     end
 
-    A --> E
-    B --> E
-    C --> E
-    D --> E
+    subgraph OBS[Monitoring stack]
+        PROM[Prometheus file_sd_config]
+        TELEGRAF[Telegraf inputs.ping]
+        GRAFANA[Dashboards and alerts]
+    end
 
-    E --> F
-    E --> G
-    E --> H
-
-    F --> I
-    G --> I
-    H --> I
-
-    I --> J
-    I --> K
-    I --> L
-
-    K --> M
-    M --> N
+    DEV --> SCAN
+    DEV --> ARP
+    SCAN -.-> NMAP
+    ARP -.-> ARPSCAN
+    ENRICH -.-> PING
+    ENRICH -.-> DNS
+    ENRICH -.-> SNMP
+    HIST --> INV
+    HIST --> TARGETS
+    HIST --> TEL
+    HIST --> HISTORY
+    DISC --> LOG
+    TARGETS --> PROM
+    TEL --> TELEGRAF
+    PROM --> GRAFANA
+    TELEGRAF --> GRAFANA
 ```
----
 
-## 📂 Estrutura do Projeto
+### Runtime sequence
+
+```mermaid
+sequenceDiagram
+    participant R as Runner
+    participant N as Nmap
+    participant A as arp-scan
+    participant H as Host workers (×20)
+    participant FS as Filesystem
+    participant P as Prometheus / Telegraf
+
+    R->>R: Load config, dictionaries, and history
+    R->>N: Discover live hosts with nmap -sn -R
+    N-->>R: IP addresses and hostnames
+    R->>A: Scan local network (up to 3 passes)
+    A-->>R: IP, MAC, and vendor data
+    par For each discovered host
+        R->>H: Submit process_host(host)
+        H->>H: MAC, DNS/mDNS, ping, ports/services
+        H->>H: OS/device type and SNMP sysDescr
+        H-->>R: Inventory record + Prometheus target
+    end
+    R->>FS: Write inventory, history, targets, and Telegraf config
+    R->>P: Restart Telegraf
+    P-->>P: Reload targets according to deployment settings
+```
+
+## Capabilities
+
+| Area | What it does |
+| --- | --- |
+| **Host discovery** | Uses Nmap ping/host discovery with reverse DNS resolution. |
+| **Layer-2 identity** | Resolves MAC addresses through `arp-scan`, including retries for individual hosts. |
+| **Enrichment** | Collects hostname, vendor, latency, OS, device type, open TCP ports, service banners, and SNMP `sysDescr`. |
+| **Classification** | Applies MAC/name, vendor, and device-type dictionaries to make raw scan data useful to operators. |
+| **Concurrency** | Processes hosts with `ThreadPoolExecutor(max_workers=20)`. |
+| **History** | Tracks first/last observation, known IP addresses, vendor, device type, OS, and latency by MAC address. |
+| **Observability** | Generates Prometheus file-based discovery targets and Telegraf ping inputs. |
+| **Operations** | Writes rotating logs (10 MiB per file, five backups) and restarts Telegraf after generation. |
+
+## Repository layout
 
 ```text
 .
-├── discovery.py
-├── config.json
-├── inventory.json
-├── history.json
-├── mac_dictionary.json
-├── vendors_dictionary.json
-├── type_dictionary.json
-├── discovery.log
-└── README.md
+├── discovery.py   # Discovery, enrichment, persistence, and integrations
+└── README.md      # Architecture and operating guide
 ```
 
----
+Runtime data files are intentionally described below because this repository currently contains the runner and documentation; deployment-specific dictionaries and output files are created or supplied at runtime.
 
-## ⚙️ Configuração
+## Requirements
 
-### config.json
+### Operating system and permissions
+
+- Linux host with access to the target network.
+- Python 3.9+ recommended.
+- Privileges sufficient for ARP/Nmap inspection and writing the configured output paths. Running with `sudo` is the simplest deployment option, but a narrowly scoped service account and capabilities are preferable for production.
+
+### System packages
+
+```bash
+sudo apt update
+sudo apt install -y \
+  python3 \
+  nmap \
+  arp-scan \
+  iputils-ping \
+  snmp \
+  avahi-utils
+```
+
+`snmp-mibs-downloader` may be useful on Debian/Ubuntu systems, although the current runner queries the numeric OID for `sysDescr`.
+
+## Installation
+
+```bash
+git clone https://github.com/paulocfmarques-collab/network-discovery-prometheus.git
+cd network-discovery-prometheus
+
+python3 --version
+chmod +x discovery.py
+```
+
+No third-party Python package is required by the current script; it uses the Python standard library and external Linux utilities listed above.
+
+## Configuration
+
+Create `config.json` in the repository directory. The script reads the `linux` section at startup:
 
 ```json
 {
@@ -387,250 +221,199 @@ flowchart LR
 }
 ```
 
-Onde:
+| Key | Required | Description |
+| --- | --- | --- |
+| `network` | Yes | CIDR range passed to Nmap, for example `192.168.1.0/24`. |
+| `localhost` | Yes | Local host IP. It receives a special MAC lookup path using `/sys/class/net/eth0/address`. |
 
-| Campo | Descrição |
-|---------|-----------|
-| network | Rede a ser escaneada |
-| localhost | IP local utilizado pela aplicação |
+Optional lookup files can be placed beside `discovery.py`:
 
----
+- `mac_dictionary.json`: exact MAC address to friendly name.
+- `vendors_dictionary.json`: vendor/OUI lookup used when ARP data is unknown.
+- `type_dictionary.json`: fallback MAC/device classification mapping.
 
-## 📚 Arquivos Auxiliares
-
-### mac_dictionary.json
-
-Mapeia MAC Address para nomes amigáveis.
+Example:
 
 ```json
 {
-  "00:11:22:33:44:55": "Servidor Principal"
+  "00:11:22:33:44:55": "Core switch"
 }
 ```
 
-### vendors_dictionary.json
+> The current implementation uses the SNMPv2c community string `public` and the `sysDescr.0` OID. Treat this as a lab/default behavior and harden it before production use.
 
-Mapeia prefixos OUI para fabricantes.
-
-```json
-{
-  "00:11:22": "Cisco"
-}
-```
-
-### type_dictionary.json
-
-Mapeia fabricantes para categorias de equipamentos.
-
-```json
-{
-  "CISCO": "Switch",
-  "HP": "Printer"
-}
-```
-
----
-
-## 🚀 Instalação
-
-### Ubuntu / Debian
-
-```bash
-sudo apt update
-
-sudo apt install -y \
-  nmap \
-  arp-scan \
-  snmp \
-  snmp-mibs-downloader
-```
-
-### Verificar Python
-
-```bash
-python3 --version
-```
-
----
-
-## ▶️ Execução
+## Running a discovery
 
 ```bash
 sudo python3 discovery.py
 ```
 
----
+The run performs the following high-level operations:
 
-## 📤 Saídas Geradas
+1. Loads configuration, dictionaries, and historical state.
+2. Discovers hosts with Nmap.
+3. Performs up to three local ARP scans.
+4. Enriches hosts concurrently.
+5. Writes inventory and monitoring artifacts.
+6. Updates history and restarts Telegraf.
 
-### Inventário
+To inspect the most recent run:
+
+```bash
+tail -f discovery.log
+python3 -m json.tool inventory.json
+```
+
+For unattended execution, schedule the command with a systemd timer or cron after validating scan duration and the impact on your network.
+
+## Generated artifacts
+
+| Artifact | Default path | Purpose |
+| --- | --- | --- |
+| Inventory | `inventory.json` | One enriched record per discovered host. |
+| History | `history.json` | Persistent MAC-based identity and IP history. |
+| Prometheus targets | `/etc/prometheus/targets/rede.json` | File-based discovery targets with labels. |
+| Telegraf config | `/etc/telegraf/telegraf.d/ping.conf` | One `inputs.ping` block per discovered host. |
+| Logs | `discovery.log` | Rotating execution and error log. |
+
+Inventory records contain fields such as `ip`, `hostname`, `mac`, `vendor`, `device_type`, `previous_ips`, `latency_ms`, `os`, `open_ports`, `services`, and `snmp_sysdescr`.
+
+A generated Prometheus target has this shape:
 
 ```json
 [
   {
-    "ip": "192.168.1.100",
-    "hostname": "server01",
-    "vendor": "Dell",
-    "os": "Linux"
+    "targets": ["192.168.1.100"],
+    "labels": {
+      "friendly_name": "server01",
+      "ip": "192.168.1.100",
+      "mac": "00:11:22:33:44:55",
+      "vendor": "Example Vendor",
+      "device_type": "server",
+      "os": "Linux",
+      "latency_ms": "0.421",
+      "network": "192.168.1.0/24"
+    }
   }
 ]
 ```
 
-### Targets Prometheus
+## Prometheus integration
 
-```json
-[
-  {
-    "targets": [
-      "192.168.1.100"
-    ]
-  }
-]
+Configure Prometheus to watch the generated file:
+
+```yaml
+scrape_configs:
+  - job_name: network-discovery
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/rede.json
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
 ```
 
-### Configuração Telegraf
+For an exporter such as Blackbox or SNMP Exporter, use the generated target labels and relabel the target into the exporter-specific parameter. Ensure the Prometheus process can read the target file and that your deployment reloads configuration/file-SD changes according to its operating model.
 
-```text
-/etc/telegraf/telegraf.d/ping.conf
+## Telegraf integration
+
+The runner writes one ping input per inventory item, for example:
+
+```toml
+[[inputs.ping]]
+  urls = ["192.168.1.100"]
+  count = 3
+  timeout = 2.0
+
+  [inputs.ping.tags]
+    device = "server01"
 ```
 
----
-
-## ⚡ Performance
-
-O processamento dos hosts é executado em paralelo utilizando:
-
-```python
-ThreadPoolExecutor(max_workers=20)
-```
-
-Isso reduz significativamente o tempo de descoberta em redes com muitos dispositivos.
-
----
-
-## 📄 Logs
-
-Os logs são gravados com rotação automática utilizando:
-
-```python
-RotatingFileHandler
-```
-
-Características:
-
-- Rotação automática
-- Histórico de execuções
-- Limite configurável de tamanho
-- Registro detalhado de erros e eventos
-
-Exemplo:
-
-```text
-2025-06-15 10:12:03 - INFO - Iniciando descoberta da rede
-2025-06-15 10:12:14 - INFO - Encontrados 42 hosts
-2025-06-15 10:12:59 - INFO - Discovery finalizado
-```
-
----
-
-## 🔒 Permissões Necessárias
-
-A aplicação utiliza ferramentas que exigem privilégios elevados.
-
-Recomenda-se executar como:
+The script then invokes:
 
 ```bash
-sudo python3 discovery.py
+systemctl restart telegraf
 ```
 
-Ou conceder permissões adequadas para:
+Make sure the executing user can write `/etc/telegraf/telegraf.d/ping.conf` and restart the service. In a high-availability or change-sensitive environment, replace the unconditional restart with a validated reload strategy.
 
-- nmap
-- arp-scan
-- consultas SNMP
-- escrita em diretórios do Prometheus
-- escrita em diretórios do Telegraf
+## Operational considerations
 
----
+### Security
 
-## 💡 Casos de Uso
+- Scan only authorized address ranges.
+- Restrict permissions on `history.json`, `inventory.json`, and logs; they may expose topology and service information.
+- Replace the hard-coded SNMP `public` community with a configurable secret and prefer SNMPv3 where possible.
+- Avoid exposing generated target files or scan logs through an untrusted web server.
 
-- Inventário automático de ativos
-- Descoberta de dispositivos desconhecidos
-- Homelabs
-- Laboratórios acadêmicos
-- Redes corporativas
-- Ambientes educacionais
-- Datacenters
-- Monitoramento de infraestrutura
+### Reliability
 
----
+- Confirm the discovery host has the correct interface and route to the target network.
+- Expect incomplete enrichment for firewalled, sleeping, or non-ARP devices.
+- Nmap OS and service detection can be slow; tune scan scope and scheduling for larger networks.
+- Review output files atomically in production so monitoring never reads a partially written file.
+- Validate generated configuration before restarting Telegraf or reloading monitoring services.
 
-## 🛣️ Roadmap
+### Data quality
 
-- [ ] Dashboard Web
-- [ ] API REST
-- [ ] Integração com NetBox
-- [ ] Exportação para Grafana
-- [ ] Banco PostgreSQL
-- [ ] Container Docker
-- [ ] Exportador Prometheus dedicado
-- [ ] Descoberta IPv6
+MAC addresses are the primary historical identity. Devices behind NAT, virtual interfaces, MAC randomization, or changing hardware can therefore appear as new identities. Treat the inventory as operational discovery data, not as an authoritative CMDB.
 
----
+## Troubleshooting
 
-## 🤝 Contribuindo
+| Symptom | Checks |
+| --- | --- |
+| No hosts found | Validate `config.json`, CIDR notation, routing, firewall rules, and Nmap permissions. |
+| Missing MAC/vendor | Confirm L2 adjacency and `arp-scan --localnet`; add a vendor lookup entry when appropriate. |
+| Empty OS/type | OS fingerprinting needs reachable ports and suitable privileges; use dictionary fallbacks where appropriate. |
+| Missing SNMP description | Confirm UDP/161 reachability, SNMP version/community, and device ACLs. |
+| Prometheus sees no targets | Check file permissions, JSON validity, Prometheus path, and `promtool check config`. |
+| Telegraf does not start | Inspect `journalctl -u telegraf`, validate the generated TOML, and verify service permissions. |
 
-Contribuições são bem-vindas.
-
-1. Faça um Fork
-2. Crie uma branch
+Useful commands:
 
 ```bash
-git checkout -b feature/minha-feature
+sudo arp-scan --localnet
+nmap -sn -R 192.168.1.0/24
+python3 -m json.tool inventory.json
+sudo promtool check config /etc/prometheus/prometheus.yml
+sudo journalctl -u telegraf -n 100 --no-pager
 ```
 
-3. Commit
+## Roadmap
 
-```bash
-git commit -m "Adiciona nova funcionalidade"
-```
+- [ ] Web dashboard and REST API
+- [ ] NetBox integration
+- [ ] PostgreSQL-backed inventory
+- [ ] Containerized deployment
+- [ ] Dedicated Prometheus exporter
+- [ ] IPv6 discovery
+- [ ] Configurable SNMP credentials and scan profiles
+- [ ] Atomic output writes and configuration validation
 
-4. Push
+## Contributing
 
-```bash
-git push origin feature/minha-feature
-```
+1. Fork the repository.
+2. Create a focused branch:
 
-5. Abra um Pull Request
+   ```bash
+   git checkout -b feature/my-improvement
+   ```
 
----
+3. Test against an authorized lab network.
+4. Keep documentation and operational requirements in sync with code.
+5. Commit clearly and open a pull request with the behavior, risks, and validation steps.
 
-## 👨‍💻 Autor
+## License
 
-### Paulo Cesar Furlanetto Marques
+This project is distributed under the MIT License. See [`LICENSE`](LICENSE) when available in the repository.
 
-GitHub:
+## Author
 
-🔗 https://github.com/paulocfmarques-collab
+**Paulo Cesar Furlanetto Marques**  
+[github.com/paulocfmarques-collab](https://github.com/paulocfmarques-collab)
 
----
+<div align="center">
 
-## 📜 Licença
+If this project helps you keep network inventory and monitoring aligned, consider giving it a ⭐.
 
-Distribuído sob a licença MIT.
-
-Consulte o arquivo `LICENSE` para mais informações.
-
----
-
-## ⭐ Apoie o Projeto
-
-Se este projeto foi útil para você:
-
-⭐ Dê uma estrela no repositório
-
-🍴 Faça um fork
-
-🚀 Compartilhe com a comunidade
-``
+</div>
